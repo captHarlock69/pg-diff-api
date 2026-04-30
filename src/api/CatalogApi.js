@@ -372,6 +372,21 @@ const query = {
 	getAvailableExtensions: function () {
 		return `SELECT name, installed_version FROM pg_available_extensions`;
 	},
+	/**
+	 *
+	 * @param {String[]} schemas
+	 */
+	getEnumTypes: function (schemas) {
+		return `SELECT n.nspname AS schema_name, t.typname AS type_name, e.enumlabel AS enum_value
+				FROM pg_type t
+				JOIN pg_enum e ON e.enumtypid = t.oid
+				JOIN pg_namespace n ON n.oid = t.typnamespace
+				WHERE n.nspname IN ('${schemas.join("','")}')
+				AND t.oid NOT IN (
+					SELECT d.objid FROM pg_depend d WHERE d.deptype = 'e'
+				)
+				ORDER BY n.nspname, t.typname, e.enumsortorder`;
+	},
 };
 
 class CatalogApi {
@@ -824,6 +839,25 @@ class CatalogApi {
 				});
 			})
 		);
+		return result;
+	}
+
+	/**
+	 *
+	 * @param {import("pg").Client} client
+	 * @param {import("../models/config")} config
+	 */
+	static async retrieveEnumTypes(client, config) {
+		let result = {};
+
+		const rows = await client.query(query.getEnumTypes(config.compareOptions.schemaCompare.namespaces));
+
+		rows.rows.forEach((row) => {
+			const fullTypeName = `"${row.schema_name}"."${row.type_name}"`;
+			if (!result[fullTypeName]) result[fullTypeName] = { values: [] };
+			result[fullTypeName].values.push(row.enum_value);
+		});
+
 		return result;
 	}
 

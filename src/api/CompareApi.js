@@ -107,6 +107,7 @@ class CompareApi {
 		dbObjects.aggregates = await catalogApi.retrieveAggregates(client, config);
 		dbObjects.sequences = await catalogApi.retrieveSequences(client, config);
 		dbObjects.extensions = await catalogApi.retrieveExtensions(client);
+		dbObjects.enumTypes = await catalogApi.retrieveEnumTypes(client, config);
 
 		//TODO: Add a way to retrieve AGGREGATE and WINDOW functions
 		//TODO: Do we need to retrieve roles?
@@ -141,6 +142,10 @@ class CompareApi {
 		eventEmitter
 	) {
 		let sqlPatch = [];
+
+		let enumScripts = this.compareEnumTypes(dbSourceObjects.enumTypes, dbTargetObjects.enumTypes);
+		sqlPatch.push(...enumScripts.topScripts);
+		eventEmitter.emit("compare", "ENUM TYPE objects have been compared", 43);
 
 		sqlPatch.push(...this.compareExtensions(dbSourceObjects.extensions, dbTargetObjects.extensions));
 		eventEmitter.emit("compare", "SCHEMA objects have been compared", 45);
@@ -188,7 +193,48 @@ class CompareApi {
 		sqlPatch.push(...this.compareTablesTriggers(dbSourceObjects.tables, dbTargetObjects.tables, addedTables));
 		eventEmitter.emit("compare", "TRIGGER objects have been compared", 85);
 
+		sqlPatch.push(...enumScripts.bottomScripts);
+
 		return sqlPatch;
+	}
+
+	/**
+	 *
+	 * @param {Object} sourceEnumTypes
+	 * @param {Object} targetEnumTypes
+	 * @returns {{ topScripts: String[], bottomScripts: String[] }}
+	 */
+	static compareEnumTypes(sourceEnumTypes, targetEnumTypes) {
+		let topScripts = [];
+		let bottomScripts = [];
+
+		for (let sourceType in sourceEnumTypes) {
+			if (!targetEnumTypes[sourceType]) {
+				topScripts.push(...this.finalizeScript(`CREATE ENUM TYPE ${sourceType}`, [sql.generateCreateEnumTypeScript(sourceType, sourceEnumTypes[sourceType].values)]));
+			} else {
+				const tgtSet = new Set(targetEnumTypes[sourceType].values);
+				const srcSet = new Set(sourceEnumTypes[sourceType].values);
+				const newValues = sourceEnumTypes[sourceType].values.filter((v) => !tgtSet.has(v));
+				const removedValues = targetEnumTypes[sourceType].values.filter((v) => !srcSet.has(v));
+
+				if (newValues.length > 0)
+					topScripts.push(...this.finalizeScript(`ALTER ENUM TYPE ${sourceType}`, [sql.generateAddEnumValueScript(sourceType, newValues)]));
+
+				if (removedValues.length > 0)
+					bottomScripts.push(
+						...this.finalizeScript(`WARNING ENUM TYPE ${sourceType}`, [
+							sql.generateRebuildEnumTypeWarningScript(sourceType, sourceEnumTypes[sourceType].values, targetEnumTypes[sourceType].values),
+						])
+					);
+			}
+		}
+
+		for (let targetType in targetEnumTypes) {
+			if (!sourceEnumTypes[targetType])
+				bottomScripts.push(...this.finalizeScript(`DROP ENUM TYPE ${targetType}`, [sql.generateDropEnumTypeScript(targetType)]));
+		}
+
+		return { topScripts, bottomScripts };
 	}
 
 	/**

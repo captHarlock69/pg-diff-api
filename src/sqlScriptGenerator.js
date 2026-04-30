@@ -869,6 +869,52 @@ CREATE SEQUENCE IF NOT EXISTS ${sequence}
 		let script = `\nALTER EXTENSION "${name}" UPDATE TO '${version}';${hints.extensionToUpdate}\n`;
 		return script;
 	},
+	/**
+	 *
+	 * @param {String} typeName fully-qualified enum type name (e.g. "public"."my_type")
+	 * @param {String[]} values ordered list of enum values
+	 */
+	generateCreateEnumTypeScript: function (typeName, values) {
+		const valueList = values.map((v) => `'${v.replace(/'/g, "''")}'`).join(", ");
+		return `\nCREATE TYPE ${typeName} AS ENUM (${valueList});\n`;
+	},
+	/**
+	 *
+	 * @param {String} typeName fully-qualified enum type name
+	 * @param {String[]} newValues values to add (must not already exist in target)
+	 */
+	generateAddEnumValueScript: function (typeName, newValues) {
+		const lines = newValues.map((v) => `ALTER TYPE ${typeName} ADD VALUE IF NOT EXISTS '${v.replace(/'/g, "''")}';`);
+		return `\n${lines.join("\n")}\n`;
+	},
+	/**
+	 *
+	 * @param {String} typeName fully-qualified enum type name
+	 */
+	generateDropEnumTypeScript: function (typeName) {
+		return `\nDROP TYPE IF EXISTS ${typeName};\n`;
+	},
+	/**
+	 * Generates a warning comment block when enum values were removed in source.
+	 * PostgreSQL does not support removing enum values without recreating the type.
+	 *
+	 * @param {String} typeName fully-qualified enum type name
+	 * @param {String[]} sourceValues desired values (from source)
+	 * @param {String[]} targetValues current values (in target)
+	 */
+	generateRebuildEnumTypeWarningScript: function (typeName, sourceValues, targetValues) {
+		const srcSet = new Set(sourceValues);
+		const removedValues = targetValues.filter((v) => !srcSet.has(v));
+		const valueList = sourceValues.map((v) => `'${v.replace(/'/g, "''")}'`).join(", ");
+		return [
+			`--WARN: Enum values present in TARGET but not in SOURCE: [${removedValues.join(", ")}]`,
+			`--WARN: PostgreSQL does not support removing enum values without recreating the type. Manual action required:`,
+			`--  1. ALTER TYPE ${typeName} RENAME TO <temp_name>;`,
+			`--  2. CREATE TYPE ${typeName} AS ENUM (${valueList});`,
+			`--  3. Migrate all columns and objects that reference this type.`,
+			`--  4. DROP TYPE <temp_name>;`,
+		].join("\n");
+	},
 };
 
 module.exports = helper;

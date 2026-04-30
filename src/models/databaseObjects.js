@@ -16,6 +16,8 @@ class DatabaseObjects {
 		this.sequences = null;
 		/** @type {Object} The definition of extensions*/
 		this.extensions = null;
+		/** @type {Object} The definition of enum types*/
+		this.enumTypes = null;
 	}
 }
 
