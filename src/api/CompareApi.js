@@ -225,7 +225,7 @@ class CompareApi {
 				sqlScript.push(sql.generateChangeCommentScript(objectType.SCHEMA, sourceSchema, sourceSchemas[sourceSchema].comment));
 			}
 
-			if (targetSchemas[sourceSchema] && sourceSchemas[sourceSchema].comment != targetSchemas[sourceSchema].comment)
+			if (targetSchemas[sourceSchema] && CompareApi.normalizeComment(sourceSchemas[sourceSchema].comment) != CompareApi.normalizeComment(targetSchemas[sourceSchema].comment))
 				sqlScript.push(sql.generateChangeCommentScript(objectType.SCHEMA, sourceSchema, sourceSchemas[sourceSchema].comment));
 
 			finalizedScript.push(...this.finalizeScript(`CREATE OR UPDATE SCHEMA ${sourceSchema}`, sqlScript));
@@ -299,7 +299,7 @@ class CompareApi {
 				if (sourceTables[sourceTable].owner != dbTargetObjects.tables[sourceTable].owner)
 					sqlScript.push(sql.generateChangeTableOwnerScript(sourceTable, sourceTables[sourceTable].owner));
 
-				if (sourceTables[sourceTable].comment != dbTargetObjects.tables[sourceTable].comment)
+				if (CompareApi.normalizeComment(sourceTables[sourceTable].comment) != CompareApi.normalizeComment(dbTargetObjects.tables[sourceTable].comment))
 					sqlScript.push(sql.generateChangeCommentScript(objectType.TABLE, sourceTable, sourceTables[sourceTable].comment));
 			} else {
 				//Table not exists on target database, then generate the script to create table
@@ -502,7 +502,7 @@ class CompareApi {
 			sqlScript.push(sql.generateChangeTableColumnScript(tableName, columnName, changes));
 		}
 
-		if (sourceTableColumn.comment != targetTableColumn.comment)
+		if (CompareApi.normalizeComment(sourceTableColumn.comment) != CompareApi.normalizeComment(targetTableColumn.comment))
 			sqlScript.push(sql.generateChangeCommentScript(objectType.COLUMN, `${tableName}.${columnName}`, sourceTableColumn.comment));
 
 		return sqlScript;
@@ -538,7 +538,7 @@ class CompareApi {
 							sql.generateChangeCommentScript(objectType.CONSTRAINT, constraint, sourceTableConstraints[constraint].comment, tableName)
 						);
 					} else {
-						if (sourceTableConstraints[constraint].comment != targetTableConstraints[constraint].comment)
+						if (CompareApi.normalizeComment(sourceTableConstraints[constraint].comment) != CompareApi.normalizeComment(targetTableConstraints[constraint].comment))
 							sqlScript.push(
 								sql.generateChangeCommentScript(
 									objectType.CONSTRAINT,
@@ -605,7 +605,7 @@ class CompareApi {
 							)
 						);
 					} else {
-						if (sourceTableIndexes[index].comment != targetTableIndexes[index].comment)
+						if (CompareApi.normalizeComment(sourceTableIndexes[index].comment) != CompareApi.normalizeComment(targetTableIndexes[index].comment))
 							sqlScript.push(
 								sql.generateChangeCommentScript(
 									objectType.INDEX,
@@ -726,7 +726,7 @@ class CompareApi {
 				if (sourceTableTriggers[trigger].definition != targetTableTriggers[trigger].definition) {
 					sqlScript.push(sql.generateDropTriggerScript(tableName, trigger));
 					sqlScript.push(sql.generateCreateTriggerScript(sourceTableTriggers[trigger]));
-					if (sourceTableTriggers[trigger].comment != targetTableTriggers[trigger].comment)
+					if (CompareApi.normalizeComment(sourceTableTriggers[trigger].comment) != CompareApi.normalizeComment(targetTableTriggers[trigger].comment))
 						sqlScript.push(sql.generateChangeCommentScript(objectType.TRIGGER, trigger, sourceTableTriggers[trigger].comment, tableName));
 				}
 			} else {
@@ -778,7 +778,7 @@ class CompareApi {
 					if (sourceViews[view].owner != targetViews[view].owner)
 						sqlScript.push(sql.generateChangeTableOwnerScript(view, sourceViews[view].owner));
 
-					if (sourceViews[view].comment != targetViews[view].comment)
+					if (CompareApi.normalizeComment(sourceViews[view].comment) != CompareApi.normalizeComment(targetViews[view].comment))
 						sqlScript.push(sql.generateChangeCommentScript(objectType.VIEW, view, sourceViews[view].comment));
 				}
 			} else {
@@ -852,7 +852,7 @@ class CompareApi {
 					if (sourceMaterializedViews[view].owner != targetMaterializedViews[view].owner)
 						sqlScript.push(sql.generateChangeTableOwnerScript(view, sourceMaterializedViews[view].owner));
 
-					if (sourceMaterializedViews[view].comment != targetMaterializedViews[view].comment)
+					if (CompareApi.normalizeComment(sourceMaterializedViews[view].comment) != CompareApi.normalizeComment(targetMaterializedViews[view].comment))
 						sqlScript.push(sql.generateChangeCommentScript(objectType.MATERIALIZED_VIEW, view, sourceMaterializedViews[view].comment));
 				}
 			} else {
@@ -932,7 +932,7 @@ class CompareApi {
 								)
 							);
 
-						if (sourceFunctions[procedure][procedureArgs].comment != sourceFunctions[procedure][procedureArgs].comment)
+						if (CompareApi.normalizeComment(sourceFunctions[procedure][procedureArgs].comment) != CompareApi.normalizeComment(targetFunctions[procedure][procedureArgs].comment))
 							sqlScript.push(
 								sql.generateChangeCommentScript(
 									procedureType,
@@ -1018,7 +1018,7 @@ class CompareApi {
 								sql.generateChangeAggregateOwnerScript(aggregate, aggregateArgs, sourceAggregates[aggregate][aggregateArgs].owner)
 							);
 
-						if (sourceAggregates[aggregate][aggregateArgs].comment != targetAggregates[aggregate][aggregateArgs].comment)
+						if (CompareApi.normalizeComment(sourceAggregates[aggregate][aggregateArgs].comment) != CompareApi.normalizeComment(targetAggregates[aggregate][aggregateArgs].comment))
 							sqlScript.push(
 								sql.generateChangeCommentScript(
 									objectType.AGGREGATE,
@@ -1117,7 +1117,7 @@ class CompareApi {
 					...this.compareSequencePrivileges(sequence, sourceSequences[sequence].privileges, targetSequences[targetSequence].privileges)
 				);
 
-				if (sourceSequences[sequence].comment != targetSequences[targetSequence].comment)
+				if (CompareApi.normalizeComment(sourceSequences[sequence].comment) != CompareApi.normalizeComment(targetSequences[targetSequence].comment))
 					sqlScript.push(sql.generateChangeCommentScript(objectType.SEQUENCE, sequence, sourceSequences[sequence].comment));
 			} else {
 				//Sequence not exists on target database, then generate the script to create sequence
@@ -1649,6 +1649,11 @@ class CompareApi {
 		}
 
 		return finalizedScript;
+	}
+
+	static normalizeComment(comment) {
+		if (!comment) return comment;
+		return comment.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 	}
 }
 
